@@ -1,0 +1,33 @@
+astar=pd.DataFrame(data={'Lat':cities.loc[final_path,"Lat"], 'Lon':cities.loc[final_path,"Lon"]})
+t=astar.reset_index(drop=True)
+a={'start':[Point(x,y) for x,y in zip(t['Lon'],t['Lat'])]}
+df_2= pd.DataFrame(a)
+df_2['stop'] = df_2['start'].shift(-1)
+t=df_2.drop(df_2.index[len(df_2)-1])
+gdf_2 = gpd.GeoDataFrame(t)
+gdf_2['line'] = gdf_2.apply(lambda x: LineString([x['start'], x['stop']]), axis=1)
+
+astar_gdf = gpd.GeoDataFrame(gdf_2, geometry=gdf_2['line'],crs="EPSG:3857")
+fig, ax = plt.subplots(figsize = (50,50))
+tx.plot(ax=ax, color='lightgrey')
+gdf.plot(ax=ax)
+astar_gdf.plot(ax=ax, color='red',linewidth= 6)
+
+for i,city in enumerate(cities['City']): #from cities.csv, i=index of start city, city=string, name of city
+  connections_distance = distances.loc[distances['Start']==city,['End','Distance']] #holds the distances between the start city to any connected city
+  connections_indexed = [cities.loc[cities["City"]==c].index[0] for c in connections_distance['End']] #replaces the end city with its index from cities.csv
+  matrix[i,connections_indexed] = connections_distance['Distance'] 
+  plt.annotate(city, (cities['Lon'][i], cities['Lat'][i]))
+  connections_location= cities.loc[matrix[i]!=0.,['City','Lon','Lat']] #lat/lon of ends
+  hub_location= cities.loc[i,['Lon','Lat']] #lat/lon of start
+
+  for j,row in connections_location.iterrows(): #insert distances in image at midpoint between cities
+    x1=row['Lon']
+    x2=hub_location['Lon']
+    y1=row['Lat']
+    y2=hub_location['Lat']
+    x_mid= ((x2-x1)/2)+x1
+    y_mid=((y2-y1)/2)+y1
+    plt.plot([x1,x2],[y1,y2],color='grey')
+    plt.annotate(str(round(connections_distance.loc[connections_distance['End']==row['City'],'Distance'].iloc[0],2)),(x_mid,y_mid))
+    plt.annotate(city, (cities['Lon'][i], cities['Lat'][i]))
