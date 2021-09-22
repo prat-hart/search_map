@@ -1,0 +1,77 @@
+from google.colab import drive
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
+!pip install git+git://github.com/geopandas/geopandas.git
+import geopandas as gpd
+from shapely.geometry import Point,LineString
+from queue import Queue, PriorityQueue
+from math import cos, asin, sqrt, pi
+
+basePath = "/content/drive/My Drive/Colab Notebooks/Artificial Intelligence/Data/"
+drive.mount('/content/gdrive/', force_remount=True)
+cities = pd.read_csv('/content/gdrive/MyDrive/Colab Notebooks/Artificial Intelligence/Data/cities.csv',header=None, names=['City','Lat','Lon'])
+distances=pd.read_csv('/content/gdrive/MyDrive/Colab Notebooks/Artificial Intelligence/Data/distances.csv',header=None, names=['Start','End', 'Distance' ])
+tx= gpd.read_file('/content/gdrive/MyDrive/Colab Notebooks/Artificial Intelligence/Data/tl_2016_48_cousub.zip') #basemap for TX image, shapefile
+
+
+#Display a 2D graph of the given data.
+fig, ax = plt.subplots(figsize = (50,50))
+
+#geopandas for lat/lon exactness and shapefile for image overlay
+d={'city':cities['City'], 'geometry':[Point(x,y) for x,y in zip(cities['Lon'],cities['Lat'])]}
+df=pd.DataFrame(d)
+gdf = gpd.GeoDataFrame(df,crs="EPSG:3857")
+tx.plot(ax=ax, color='lightgrey')
+gdf.plot(ax=ax)
+ax.set_title('Texas Map')
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+
+matrix = np.zeros((len(cities),len(cities))) #initialize 2d (n,n) zero matrix, n=length of city list
+
+for i,city in enumerate(cities['City']): #from cities.csv, i=index of start city, city=string, name of city
+  connections_distance = distances.loc[distances['Start']==city,['End','Distance']] #holds the distances between the start city to any connected city
+  connections_indexed = [cities.loc[cities["City"]==c].index[0] for c in connections_distance['End']] #replaces the end city with its index from cities.csv
+  matrix[i,connections_indexed] = connections_distance['Distance'] 
+  plt.annotate(city, (cities['Lon'][i], cities['Lat'][i]))
+  connections_location= cities.loc[matrix[i]!=0.,['City','Lon','Lat']] #lat/lon of ends
+  hub_location= cities.loc[i,['Lon','Lat']] #lat/lon of start
+
+  for j,row in connections_location.iterrows(): #insert distances in image at midpoint between cities
+    x1=row['Lon']
+    x2=hub_location['Lon']
+    y1=row['Lat']
+    y2=hub_location['Lat']
+    x_mid= ((x2-x1)/2)+x1
+    y_mid=((y2-y1)/2)+y1
+    plt.plot([x1,x2],[y1,y2],color="k")
+    plt.annotate(str(round(connections_distance.loc[connections_distance['End']==row['City'],'Distance'].iloc[0],2)),(x_mid,y_mid))
+    
+    
+symmetric_matrix = matrix + matrix.T - np.diag(np.diag(matrix)) 
+
+def uniform_cost_search(graph, start):
+  frontier = PriorityQueue()
+  explored = list()
+  frontier.put((0,0,start,start))
+  cumulative_cost=0
+
+  while not frontier.empty():
+    cost, prev_cost, current_node, prev_node = frontier.get() #find the closest city
+    if current_node in [x[1] for x in explored]:
+      continue
+    explored.append((prev_node,current_node)) #adds nodes to the explored list
+    g = cost
+    cumulative_cost += g-prev_cost
+   
+    for next_node,next_cost in enumerate(graph[current_node]): #indexes each current node and its cost as tuple (index of the city,cost) 
+        if next_cost > 0 and next_node not in [x[1] for x in explored]: #make sure there is a connection, and have not been to city
+            frontier.put((g+next_cost,g,next_node,current_node)) #adds the tuple into  queue
+  return cumulative_cost,explored         
+
+ucs_cost, ucs_path = uniform_cost_search(symmetric_matrix,34)
+print(f'Distance travelled:,{ucs_cost}')
+start= [x[0] for x in ucs_path]
+stop = [x[1] for x in ucs_path]
+print(f'Path taken:\n{cities.loc[stop,"City"]}')                           
