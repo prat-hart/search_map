@@ -1,0 +1,43 @@
+def straight_line_distance(lat1, lon1, lat2, lon2):
+  """for each lat,lon combo output straight line distance in miles= hueristics
+  """
+  p = pi/180
+  a = 0.5 - cos((lat2-lat1)*p)/2 + cos(lat1*p) * cos(lat2*p) * (1-cos((lon2-lon1)*p))/2
+  return 12742 * asin(sqrt(a)) * 0.621371 #miles
+
+def a_star_search(graph, start, goal):
+  """from starting citiy, reach goal in shortest path cost. output path traveled and path cost.
+  args- graph=ndarray;collection of edge weights from adjacency matrix
+       start=int;index of start city
+       goal=int;index of goal city
+  returns- distance traveled, path traveled
+  """
+  sld = cities.apply(lambda x: straight_line_distance(x['Lat'],x['Lon'],cities.loc[goal,'Lat'],cities.loc[goal,"Lon"]),axis=1) #h(n) values
+  frontier = PriorityQueue()
+  explored = list()
+  path=list()
+  frontier.put((0+sld[start],start,start)) #tuple with (g(n)+h(n), n)
+
+  while not frontier.empty():
+      cost,current_node,came_from = frontier.get() #find the closest city 
+      explored.append((came_from,current_node)) #adds nodes to the explored list
+      path.append(came_from)
+      g = cost-sld[current_node] #the cost of g(n)
+
+      for next_node,next_cost in enumerate(graph[current_node]):
+        if next_cost > 0 and next_node not in [x[1] for x in explored]:
+          frontier.put((g+next_cost+sld[next_node],next_node,current_node))
+          if next_node==goal:
+            explored.append((current_node,goal))
+            return g+next_cost, explored
+            
+distance, path = a_star_search(symmetric_matrix,28,6)
+print(f'Total distance travelled: {distance}')
+cur_node= 6
+final_path =[cur_node]
+for x in path[::-1]:
+  if cur_node == x[1]:
+    cur_node=x[0]
+    final_path.append(cur_node)
+final_path= final_path[:-1][::-1]
+print(f'Path taken:\n{cities.loc[final_path,"City"]}')
